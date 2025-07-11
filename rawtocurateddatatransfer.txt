@@ -1,0 +1,74 @@
+from pyspark.sql.functions import col
+dbutils.widgets.text("Process Name", "")
+input = dbutils.widgets.get("Process Name")
+print(f"Input process: {input}")
+
+df = spark.read.table("default.book_2")
+df.display()
+
+# Filter rows for the input process name
+filtered_df = df.filter(col("Pname") == input)
+filtered_df.display()
+
+# Prepare schema and logic info
+tables = {}
+logics = {}
+layers = ["raw", "curated"]
+
+for row in filtered_df.collect():
+    table_name = row["Rtable"]
+    column_name = row["Rcol"]
+    data_type = row["Rcoldt"]
+    logic = row["Logic"]
+
+    if logic and logic.strip():
+        logics[table_name] = logic
+
+    if table_name not in tables:
+        tables[table_name] = []
+
+    tables[table_name].append((column_name, data_type))
+
+# Create or replace tables in both raw and curated
+for layer in layers:
+    spark.sql(f"CREATE DATABASE IF NOT EXISTS {layer}")
+    for table_name, columns in tables.items():
+        schema_str = ", ".join([f"{col} {dtype.upper()}" for col, dtype in columns])
+        spark.sql(f"CREATE OR REPLACE TABLE {layer}.{table_name} ({schema_str}) USING DELTA")
+        print(f"Created `{layer}.{table_name}` with schema: {schema_str}")
+        spark.read.table(f"{layer}.{table_name}").printSchema()
+
+# Overwrite raw.user
+spark.sql("TRUNCATE TABLE raw.user")
+spark.sql("""
+    INSERT INTO raw.user (Id, Name)
+    VALUES
+      ('101', 'Devesh'),
+      ('102', 'Rahul'),
+      ('103', 'Aman'),
+      (NULL, 'Somya')
+""")
+
+# Overwrite raw.sales
+spark.sql("TRUNCATE TABLE raw.sales")
+spark.sql("""
+    INSERT INTO raw.sales (Id, Date)
+    VALUES
+      ('101', '2025-08-09'),
+      ('102', '2025-08-19'),
+      ('103', '2025-08-19'),
+      (NULL, '2025-08-19')
+""")
+
+# # Show raw tables
+# spark.sql("SELECT * FROM raw.user").show()
+# spark.sql("SELECT * FROM raw.sales").show()
+
+# Apply logic to curated tables
+for table_name, logic in logics.items():
+    try:
+        print(f"Applying logic to {table_name}: {logic}")
+        spark.sql(f"INSERT OVERWRITE TABLE curated.{table_name} SELECT * FROM raw.{table_name} WHERE {logic}")
+        spark.sql(f"SELECT * FROM curated.{table_name}").show()
+    except Exception as e:
+        print(f" Error processing {table_name}: {e}")
