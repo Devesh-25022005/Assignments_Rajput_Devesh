@@ -1,0 +1,62 @@
+1. How many users are there?
+SELECT COUNT(DISTINCT user_id) AS total_users FROM users;
+
+
+2. How many cookies does each user have on average?
+WITH cookie_counts AS (
+  SELECT user_id, COUNT(DISTINCT cookie_id) AS cookie_count
+  FROM users
+  GROUP BY user_id
+)
+SELECT ROUND(AVG(cookie_count), 1) AS avg_cookies_per_user
+FROM cookie_counts;
+
+3. Unique number of visits by all users per month
+SELECT DATE_TRUNC('month', e.event_time) AS month,
+       COUNT(DISTINCT e.visit_id) AS visits
+FROM events e
+JOIN users u ON e.cookie_id = u.cookie_id
+GROUP BY month
+ORDER BY month;
+
+4. Number of events for each event type
+
+SELECT i.event_name, COUNT(*) AS event_count
+FROM events e
+JOIN event_identifier i ON e.event_type = i.event_type
+GROUP BY i.event_name;
+
+5. Percentage of visits with a purchase event
+
+SELECT ROUND(
+  COUNT(DISTINCT CASE WHEN e.event_type = 3 THEN e.visit_id END) * 100.0
+  / COUNT(DISTINCT e.visit_id), 2
+) AS pct_visits_with_purchase
+FROM events e;
+
+6.SELECT 
+  ROUND(
+    100.0 * COUNT(*) * 1.0 / (
+      SELECT COUNT(DISTINCT visit_id)
+      FROM events
+      WHERE page_id = 12
+    ), 2
+  ) AS percent_checkout_no_purchase
+FROM events
+WHERE page_id = 12 AND event_type != 3;
+
+
+
+7. SELECT page_id, COUNT(*) AS views
+FROM events
+WHERE event_type = 1 -- Assuming 1 = Page View
+GROUP BY page_id
+ORDER BY views DESC
+LIMIT 3;
+
+8.SELECT product_category,
+  COUNT(CASE WHEN event_type = 1 THEN 1 END) AS views,
+  COUNT(CASE WHEN event_type = 2 THEN 1 END) AS cart_adds
+FROM events e
+JOIN page_hierarchy p ON e.page_id = p.page_id
+GROUP BY product_category;
