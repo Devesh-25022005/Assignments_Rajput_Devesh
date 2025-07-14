@@ -1,0 +1,31 @@
+# reading csv files into df and displaying some rows
+df=spark.read.csv("/Volumes/workspace/default/skit_assignment/ynbAl2nVSGGR2ffAsV7L_Sales.csv",header =True, inferSchema =True)
+display(df.limit(5))
+
+#filter data
+filtered_df = df.filter((df.SALES > 1000))
+display(filtered_df)
+
+# select columns
+df_selected = filtered_df.select("ORDERNUMBER","PRICEEACH","SALES","ORDERDATE","CUSTOMERNAME")
+display(df_selected)
+
+# Write Transformed DataFrame to Delta Table:
+df_selected.write.format("delta").mode("append").saveAsTable("default.agg_sales_data")
+
+#checking History of delta_table
+df_history = spark.sql("DESCRIBE HISTORY default.agg_sales_data")
+display(df_history)
+
+#reading data from specific version of delta table
+df_version = spark.read.format("delta").option("versionAsOf",1).table("default.agg_sales_data")
+display(df_version)
+
+# advance transfromation on employee csv
+df2 = spark.read.csv("/Volumes/workspace/default/raw_volume/Am5UzvO6R2CXcb4NRunM_Employee_Attrition.csv",header=True, inferSchema = True)
+
+display(df2.limit(5))
+
+#Advanced transfromation
+df2_transformed = df2.filter((df2.Attrition == 'Yes') & (df2.JobSatisfaction < 3)).select("EmployeeNumber", "Age", "Department", "JobRole", "MonthlyIncome", "JobSatisfaction", "Attrition")
+df2_transformed.write.format("delta").mode("overwrite").partitionBy("Department").save("/Volumes/workspace/default/raw_volume/high_attrition_risk_employees")
